@@ -15,9 +15,9 @@ class MSAC {
 
     private $availability;
 
-    public function fetchAvailability($type, $date) {
+    public function fetchAvailability($date) {
         $this->date = $date;
-        $url = sprintf($this->url, $type, $date->format('Y-m-d'));
+        $url = sprintf($this->url, $this->type, $date->format('Y-m-d'));
         $file = file($url);
 
         $court    = 0;
@@ -25,6 +25,7 @@ class MSAC {
         $bookings = [];
         $events   = false;
 
+        /* Parse Javascript */
         foreach ($file as $line) {
             if (preg_match('!, events: \[!', $line)) {
                 $events = true;
@@ -92,7 +93,7 @@ class MSAC {
                     $time->setTime($h, $m);
                     $available = true;
                     foreach ($entries as $entry) {
-                        if ($time > $entry['start'] and $time < $entry['end']) {
+                        if ($time >= $entry['start'] and $time < $entry['end']) {
                             $available = false;
                             break;
                         }
@@ -104,4 +105,110 @@ class MSAC {
             echo PHP_EOL;
         }
     }
+
+    public function findCourts($time, $duration, $count = 1) {
+        if (empty($this->availability)) {
+            throw new \RuntimeException('No availability found. Run fetchAvailability() first');
+        }
+
+        if (!preg_match('!^[0-9]{1,2}:[0-9]{2}$!', $time)) {
+            throw new \RuntimeException('Time format must me HH:mm');
+        }
+
+        list($hour, $min) = explode(':', $time);
+        $min = intval($min);
+
+        if ($hour < 6 or $hour > 23) {
+            throw new \RuntimeException('Can only book between 6:00 and 23:00');
+        }
+
+        if (!in_array($min, [0, 15, 30, 45])) {
+            throw new \RuntimeException('A booking can only start every quarter of an hour.');
+        }
+
+        if (!$duration) {
+            throw new \RuntimeException('Booking duration has to be greater than 0.');
+        }
+
+        if ($duration % 15) {
+            throw new \RuntimeException('Booking duration has to be in 15 minute intervals.');
+        }
+
+        $startDate = clone $this->date;
+        $startDate->setTime($hour, $min);
+        $endDate = clone $startDate;
+        $endDate->modify(sprintf("+%d minute", $duration));
+
+        $availableCourts = [];
+        /* Find all available courts during requested time period */
+        foreach ($this->availability as $court => $entries) {
+            $free = true;
+            foreach ($entries as $entry) {
+                if ($startDate < $entry['end'] and $endDate > $entry['start']) {
+                    $free = false;
+                }
+            }
+            if ($free) {
+                $availableCourts[] = $court;
+            }
+        }
+
+        if (count($availableCourts) < $count) {
+            throw new \RuntimeException(sprintf('Only %d courts available', count($availableCourts)));
+        }
+
+//        echo count($availableCourts).' courts available: '.implode(' ', $availableCourts).PHP_EOL;
+
+        /* Find horizontally adjacent courts */
+        $courtsToBook = [];
+        if ($count < 4) {
+            foreach ($availableCourts as $court) {
+                $free = true;
+                $row = intval(($court - 1)/3);
+                for ($i = 1; $i < $count; $i++) {
+                    if (!in_array($court + $i, $availableCourts)) {
+                        $free = false;
+                        break;
+                    }
+                    /* Make sure courts are in the same row */
+                    if ($row != intval(($court + $i - 1) / 3)) {
+                        $free = false;
+                        break;
+                    }
+                }
+                if ($free) {
+                    for ($i = 0; $i <= $count-1; $i++) {
+                        $courtsToBook[] = $court+$i;
+                    }
+                    break;
+                }
+            }
+
+        }
+
+        /* Find vertically adjacent courts */
+        if (empty($courtsToBook) and $count < 3) {
+            foreach ($availableCourts as $court) {
+                if (in_array($court + 3, $availableCourts)) {
+                    $courtsToBook[] = $court;
+                    $courtsToBook[] = $court + 3;
+                    break;
+                }
+            }
+        }
+
+        /* No adjacent courts found, booking whatever is there */
+        if (empty($courtsToBook)) {
+            while (count($courtsToBook) < $count) {
+                $courtsToBook[] = array_pop($availableCourts);
+            }
+        }
+
+        if (count($courtsToBook) < $count) {
+            throw new \RuntimeException('Not enough courts available');
+        }
+
+        return $courtsToBook;
+    }
+
 }
