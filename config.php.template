@@ -1,0 +1,16 @@
+<?php
+
+$accounts = [
+    [
+        'username' => '',
+        'password' => '',
+    ],
+];
+
+$payment = [
+    'cc_number'    => '',
+    'name'         => '',
+    'expiry_year'  => '18',
+    'expiry_month' => '01',
+    'cvv'          => '',
+];
