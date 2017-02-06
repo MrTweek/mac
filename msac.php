@@ -1,5 +1,7 @@
 <?php
 
+include_once "curl.php";
+
 class MSAC {
 
     const TABLE_TENNIS = 1082;
@@ -7,7 +9,8 @@ class MSAC {
 
     private $type;
     private $date;
-    private $url = 'https://secure.activecarrot.com/public/facility/iframe/33/%s/%s';
+    private $url      = 'https://secure.activecarrot.com/public/facility/iframe/33/%s/%s';
+    private $loginUrl = 'https://secure.activecarrot.com/login?site=33'
 
     public function __construct($type) {
         $this->type = $type;
@@ -209,6 +212,29 @@ class MSAC {
         }
 
         return $courtsToBook;
+    }
+
+    public function login($username, $password) {
+        $file = file($this->loginUrl);
+        foreach ($file as $line) {
+            if (preg_match('!type="hidden" name="token"!', $line)) {
+                $token = preg_replace('!^.*? value="([0-9a-f]+)" .*$!', $line);
+                break;
+            }
+        }
+        if (!isset($token) or empty($token)) {
+            throw new \RuntimeException('Could not find login token');
+        }
+
+        $curl = new Curl();
+
+        $data = [
+            'username' => $username,
+            'password' => $password,
+            'token'    => $token,
+        ];
+
+        $curl->postRequest($this->loginUrl, $data);
     }
 
 }
