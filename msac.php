@@ -10,7 +10,7 @@ class MSAC {
     private $type;
     private $date;
     private $url      = 'https://secure.activecarrot.com/public/facility/iframe/33/%s/%s';
-    private $loginUrl = 'https://secure.activecarrot.com/login?site=33'
+    private $loginUrl = 'https://secure.activecarrot.com/login?site=33';
 
     public function __construct($type) {
         $this->type = $type;
